@@ -62,14 +62,10 @@ You will see print statements indicating:
 *   The (mock) processing within each module.
 *   The final aggregated results (which will be based on mock data).
 
-**Important Note on `DataCollector` Input:**
-The current `WorkflowController.execute_pipeline()` starts the first module (`DataCollector`) with an empty input dictionary `{}`. The skeleton `DataCollector.validate_input()` method expects specific keys (like 'symbols', 'timeframe'). This will likely cause a `ValueError` when running `main.py` with the unmodified skeletons.
+**Initial Input for `DataCollector`:**
+The `crypto_ai_system/main.py` script now defines and passes an initial set of parameters (symbols, timeframe, etc.) to the `DataCollector` module when the pipeline starts. This is achieved by using the `initial_inputs_for_modules` argument in the `WorkflowController.execute_pipeline()` method.
 
-To see the full pipeline flow for demonstration purposes:
-*   **Option A (Recommended for quick demo):** Temporarily modify the `validate_input` method in `crypto_ai_system/modules/data/collector.py` to be more lenient if the input `data` is empty (e.g., by providing default values or skipping validation if `data` is empty).
-*   **Option B (Future Work):** Enhance `WorkflowController.execute_pipeline` to accept an `initial_payload` that can be passed to the first module. The `main.py` script could then be updated to provide this initial data.
-
-This behavior highlights an important integration point to be addressed for a fully functional system.
+This ensures that `DataCollector` receives the necessary input to pass its validation step and begin its (mock) processing, allowing the pipeline to proceed through all modules. You should now see output from all skeleton modules when running `python main.py`.
 
 ## Future Development
 

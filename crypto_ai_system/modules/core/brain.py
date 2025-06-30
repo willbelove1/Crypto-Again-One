@@ -188,29 +188,23 @@ class WorkflowController:
         self.module_instances[module_id] = instance
         print(f"Module {module_id} registered.")
 
-    async def execute_module(self, module_id: str, dependencies_results: list[Dict]) -> Dict:
-        """Executes a single module using its registered instance."""
+    async def execute_module(self, module_id: str, current_module_input_data: Dict) -> Dict:
+        """
+        Executes a single module using its registered instance with the provided direct input.
+        """
         if module_id not in self.module_instances:
             raise Exception(f"Module {module_id} not registered or initialized.")
 
         module_instance = self.module_instances[module_id]
 
-        # Prepare input for the current module
-        # The input_data for a module could be a dictionary of its dependencies' outputs
-        input_data_for_module: Dict[str, Any] = {}
-        for dep_result in dependencies_results:
-            if dep_result and "module_id" in dep_result and "data" in dep_result: # Ensure result is valid
-                 input_data_for_module[dep_result["module_id"]] = dep_result # Pass the whole result object
-            # else:
-            #     print(f"Warning: Dependency result for {module_id} is not in expected format: {dep_result}")
+        # The input_data_for_module is now directly passed as current_module_input_data
+        print(f"Executing module: {module_id} with direct input keys: {list(current_module_input_data.keys())}")
+        return await module_instance.execute(current_module_input_data)
 
-
-        print(f"Executing module: {module_id} with input from: {list(input_data_for_module.keys())}")
-        return await module_instance.execute(input_data_for_module)
-
-    async def execute_pipeline(self, pipeline_name: str = "default_crypto_pipeline") -> Dict:
+    async def execute_pipeline(self, pipeline_name: str = "default_crypto_pipeline", initial_inputs_for_modules: Dict[str, Any] = None) -> Dict:
         """
         Executes the defined pipeline of modules based on DAG.
+        Allows providing initial inputs for specific modules, especially start nodes.
         For now, pipeline_name is not used but could select different DAGs in the future.
         """
         print(f"Starting pipeline: {pipeline_name} in state: {self.current_state}")
@@ -289,11 +283,35 @@ class WorkflowController:
             self.current_state = f"EXECUTING_{module_id.upper().replace('.', '_')}" # Update state
             print(f"Transitioning to state: {self.current_state} for module: {module_id}")
 
-            # Gather results from dependencies
-            dependencies_for_module = self.dag[module_id]
-            dependency_outputs = [results[dep_id] for dep_id in dependencies_for_module if dep_id in results]
+            # Determine the input for the current module
+            current_module_input: Dict[str, Any]
+            dependencies_for_this_module = self.dag[module_id]
 
-            module_result = await self.execute_module(module_id, dependency_outputs)
+            is_start_node_with_initial_input = (initial_inputs_for_modules and
+                                                module_id in initial_inputs_for_modules and
+                                                not dependencies_for_this_module)
+
+            if is_start_node_with_initial_input:
+                # This is a start node and has initial input provided
+                current_module_input = initial_inputs_for_modules[module_id]
+                print(f"Using initial input for start node {module_id}")
+            else:
+                # This node depends on other modules, collate their results.
+                # The input to a module's execute() method is a dictionary where keys are
+                # the module_ids of its dependencies and values are the full output dicts
+                # from those dependency modules.
+                current_module_input = {}
+                for dep_id in dependencies_for_this_module:
+                    if dep_id in results:
+                        current_module_input[dep_id] = results[dep_id]
+                    else:
+                        # This case should ideally not happen if DAG is correct and all deps run successfully before this.
+                        # Or, it could mean a dependency failed and its result is not in `results`.
+                        print(f"Warning: Dependency {dep_id} for module {module_id} not found in results. It might have failed or not run.")
+                        # We might need to decide if the module can run with partial input or should fail.
+                        # For now, it will run with whatever inputs are available.
+
+            module_result = await self.execute_module(module_id, current_module_input)
             results[module_id] = module_result
 
             if module_result.get("status") == "error":

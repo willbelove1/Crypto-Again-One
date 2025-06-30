@@ -49,7 +49,20 @@ async def main_logic():
     # DataCollector.validate_input due to the empty initial input from the pipeline.
     # This highlights a point of integration to be addressed in further development.
 
-    pipeline_results = await controller.execute_pipeline(pipeline_name="crypto_skeleton_pipeline_run")
+    # Define initial input for the DataCollector module
+    # This matches the INPUT_SCHEMA for DataCollector from the tech spec
+    initial_input_for_collector = {
+        "symbols": ["BTC", "ETH", "SOL"],
+        "timeframe": "1h",
+        "data_types": ["price", "volume", "orderbook"],
+        "sources": ["binance_mock", "okx_mock"] # Using mock sources for the skeleton
+    }
+
+    # Pass the initial input to the pipeline execution
+    pipeline_results = await controller.execute_pipeline(
+        pipeline_name="crypto_skeleton_pipeline_run",
+        initial_inputs_for_modules={"mod.data.collector": initial_input_for_collector}
+    )
 
     print("\n--- Full Pipeline Execution Results ---")
     print(json.dumps(pipeline_results, indent=2))
